@@ -5,7 +5,7 @@ from typing import List
 
 
 def explain(compiled_func, *args, **kwargs):
-    result = torch._dynamo.explain(compiled_func, *args, **kwargs)
+    result = torch._dynamo.explain(compiled_func)(*args, **kwargs)
 
     if isinstance(result, tuple):  # Torch 2.0
         (

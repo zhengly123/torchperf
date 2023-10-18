@@ -79,9 +79,8 @@ def cuda_timeit(func, warmup=5, iters=100, compile=True) -> float:
     """Return runtime in seconds"""
 
     if compile:
-        return cuda_timeit_compile(func, iters)
-    else:
-        return cuda_timeit_eager(func, warmup, iters)
+        func = torch.compile(func)
+    return cuda_timeit_eager(func, warmup, iters)
 
 
 def cuda_timeit_compile(func, iters) -> float:
@@ -90,16 +89,17 @@ def cuda_timeit_compile(func, iters) -> float:
         for i in range(iters):
             func()
 
-    (
-        explanation,
-        out_guards,
-        graphs,
-        ops_per_graph,
-        break_reasons,
-        explanation_verbose,
-    ) = torch._dynamo.explain(compiled)
-    if len(graphs) != 1:
-        print(f"Warning: {len(graphs)} graphs are generated")
+    # (
+    #     explanation,
+    #     out_guards,
+    #     graphs,
+    #     ops_per_graph,
+    #     break_reasons,
+    #     explanation_verbose,
+    # ) = torch._dynamo.explain(compiled)
+    # if len(graphs) != 1:
+    #     print(f"Warning: {len(graphs)} graphs are generated")
+    # explain(compiled)
 
     # Warm up
     compiled()
