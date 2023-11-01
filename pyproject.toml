@@ -1,7 +1,4 @@
 [project]
 name = "torchperf"
 version = "0.0.1"
-dependencies = [
-    "nvtx",
-    "onnx",
-]
+dependencies = ["nvtx", "onnx", "tabulate"]
