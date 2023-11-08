@@ -75,13 +75,16 @@ def add_perf_info(
     return model
 
 
-def cuda_timeit(func, warmup=5, iters=100, compile=True, dynamic=True) -> float:
+def cuda_timeit(func, warmup=5, iters=100, compile=False, dynamic=True) -> float:
     """Return runtime in seconds"""
+    return cuda_timeit(func, warmup, iters, compile, dynamic) / 1000
 
+
+def cuda_timeit_ms(func, warmup=5, iters=100, compile=False, dynamic=True) -> float:
+    """Return runtime in milliseconds"""
     if compile:
         func = torch.compile(func, dynamic=dynamic)
     return cuda_timeit_event(func, warmup, iters)
-    # return cuda_timeit_eager(func, warmup, iters)
 
 
 def cuda_timeit_compile(func, iters) -> float:
