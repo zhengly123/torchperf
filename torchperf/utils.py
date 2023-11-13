@@ -43,10 +43,13 @@ def shapes_to_tensors(shapes, old_batch=None, new_batch=None):
         raise ValueError(f"Unknown type {type(shapes)}")
 
 
-def allclose(x: torch.Tensor, y: torch.Tensor, rtol=1e-3, atol=1e-3):
+def allclose(x: torch.Tensor, y: torch.Tensor, rtol=1e-3, atol=1e-3, etol=0):
+    """allclose with error tolerance"""
     close = torch.allclose(x.flatten(), y.flatten(), rtol, atol)
     if not close:
         n_close = torch.isclose(x.flatten(), y.flatten(), rtol, atol).sum()
         n_el = x.numel()
+        if n_close / n_el >= 1 - etol:
+            return True
         print(f"Close rate {n_close}/{n_el} = {float(n_close)/n_el*100:.1f}%")
     return close
