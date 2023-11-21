@@ -20,7 +20,7 @@ def tensors_to_shapes(tensors):
 def shapes_to_tensors(shapes, old_batch=None, new_batch=None):
     if isinstance(shapes, torch.Size):
         if len(shapes) == 0:  # Timestamp
-            print(f"Find 0-dim tensor and replace with 1")
+            print(f"Find 0-dim tensor and replace it with 1")
             return torch.tensor(1)
         if old_batch is not None:
             assert shapes[0] == old_batch
