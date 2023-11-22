@@ -62,26 +62,36 @@ def draw_simple_graph(gm, fn):
     dot_graph = pydot.Dot("torchTX Graph", graph_type="graph")
     nodes: list[torch.fx.Node] = gm.graph.nodes
     for node in nodes:
-        print(f"{node.name} {node}")
-        label = f"{node.name}"
+        label = f"{node.name} ({node.op})"
+        node_style = {
+            "shape": "record",
+            "fillcolor": "white",
+            "style": "rounded, filled",
+        }
         if hasattr(node, "info"):
-            label += f" | {node.info}"
+            label += f"\\n| {node.info} "
+            if hasattr(node.info, "isRagged") and node.info.isRagged():
+                node_style["fillcolor"] = "#9eb8d9"
+            if hasattr(node.info, "is_shape") and node.info.is_shape:
+                node_style["fillcolor"] = "#40e0d0"
         if hasattr(node, "ragged"):
-            label += f" | {node.ragged}"
+            label += f"\\n| {node.ragged}"
         try:
             if isinstance(
                 node.meta["tensor_meta"], torch.fx.passes.shape_prop.TensorMetadata
             ):
-                label += f" | {node.meta['tensor_meta'].shape}"
+                label += f"\\n| {node.meta['tensor_meta'].shape}"
         except KeyError:
             None
-        dot_graph.add_node(pydot.Node(str(node.name), label=label))
+        dot_graph.add_node(
+            # "{}" makes the label in horizontal blocks
+            pydot.Node(str(node.name), label="{" + label + "}", **node_style)
+        )
     for node in nodes:
         for arg in node.args:
             if isinstance(arg, torch.fx.node.Node):
                 dot_graph.add_edge(pydot.Edge(arg.name, node.name))
             elif isinstance(arg, (list, tuple)):
-                print("list of args", node.name)
                 for v in arg:
                     if isinstance(v, torch.fx.node.Node):
                         dot_graph.add_edge(pydot.Edge(v.name, node.name))
