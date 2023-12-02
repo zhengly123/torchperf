@@ -77,7 +77,7 @@ def add_perf_info(
 
 def cuda_timeit(func, warmup=5, iters=100, compile=False, dynamic=True) -> float:
     """Return runtime in seconds"""
-    return cuda_timeit(func, warmup, iters, compile, dynamic) / 1000
+    return cuda_timeit_ms(func, warmup, iters, compile, dynamic) / 1000
 
 
 def cuda_timeit_ms(func, warmup=5, iters=100, compile=False, dynamic=True) -> float:
