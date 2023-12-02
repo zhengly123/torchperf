@@ -27,7 +27,7 @@ def shapes_to_tensors(shapes, old_batch=None, new_batch=None):
         if new_batch is None:
             new_batch = list(shapes)[0]
         return torch.randn(
-            [new_batch] + list(shapes)[1:], dtype=torch.float16, device="cuda"
+            [new_batch] + list(shapes)[1:]  # , dtype=torch.float16, device="cuda"
         )
     elif isinstance(shapes, list):
         return [shapes_to_tensors(t, old_batch, new_batch) for t in shapes]
@@ -43,8 +43,13 @@ def shapes_to_tensors(shapes, old_batch=None, new_batch=None):
         raise ValueError(f"Unknown type {type(shapes)}")
 
 
-def allclose(x: torch.Tensor, y: torch.Tensor, rtol=1e-3, atol=1e-3, etol=0):
+def allclose(x: torch.Tensor, y: torch.Tensor, rtol=1e-3, atol=1e-3, etol=0.0):
     """allclose with error tolerance"""
+    assert torch.is_tensor(x), f"x is not a tensor. {x}"
+    assert torch.is_tensor(y), f"y is not a tensor. {y}"
+    assert (
+        x.numel() == y.numel()
+    ), f"X has shape {x.shape} ({x.numel()}) but Y has shape {y.shape} ({y.numel()})"
     close = torch.allclose(x.flatten(), y.flatten(), rtol, atol)
     if not close:
         n_close = torch.isclose(x.flatten(), y.flatten(), rtol, atol).sum()

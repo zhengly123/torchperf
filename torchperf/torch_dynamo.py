@@ -95,6 +95,7 @@ def draw_simple_graph(gm, fn):
                 for v in arg:
                     if isinstance(v, torch.fx.node.Node):
                         dot_graph.add_edge(pydot.Edge(v.name, node.name))
+    print(f"[INFO] FX graph written to {fn}")
     dot_graph.write_svg(fn)
 
 
@@ -117,18 +118,29 @@ def plot_graph_module_backend(
     return lambda *x: gm
 
 
-def get_dynamo_graph_modules(module, args, kwargs, full_graph=False):
+def get_dynamo_graph_modules_and_args(
+    module, args, kwargs, full_graph=False, dynamic=None
+):
     gms = []
+    example_input_lists = []
 
     def backend_get_graph_module(
-        gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor]
+        gm: torch.fx.GraphModule, example_inputs: List[torch.Tensor | torch.SymInt]
     ):
         gms.append(gm)
+        example_input_lists.append(example_inputs)
+        print("example_inputs", example_inputs)
         return gm.forward
 
-    module = torch.compile(module, backend=backend_get_graph_module)
+    module = torch.compile(module, backend=backend_get_graph_module, dynamic=dynamic)
     module(*args, **kwargs)
     assert len(gms) > 0, "Does the graph hit cache?"
     if full_graph:
         assert len(gms) == 1, f"Captured {len(gms)} graphs"
-    return gms
+    return gms, example_input_lists
+
+
+def get_dynamo_graph_modules(module, args, kwargs, full_graph=False, dynamic=None):
+    return get_dynamo_graph_modules_and_args(module, args, kwargs, full_graph, dynamic)[
+        0
+    ]
