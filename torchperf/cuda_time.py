@@ -2,6 +2,7 @@ import torch
 import nvtx
 import functools
 import inspect
+import datetime
 from nvtx import annotate as nvtx_annotate
 import time
 from .torch_dynamo import explain
@@ -129,7 +130,7 @@ def cuda_timeit_eager(func, warmup=5, iters=100) -> float:
 
 
 def cuda_timeit_event(func, warmup=5, iters=100) -> float:
-    """Return runtime in seconds"""
+    """Return runtime in milliseconds"""
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
 
@@ -141,3 +142,101 @@ def cuda_timeit_event(func, warmup=5, iters=100) -> float:
     end.record()
     torch.cuda.synchronize()
     return start.elapsed_time(end) / iters
+
+
+def cuda_timeit_host_ms(func, warmup=5, iters=100) -> float:
+    """Return runtime in milliseconds"""
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+
+    for i in range(warmup):
+        func()
+    torch.cuda.synchronize()
+    t0 = time.perf_counter_ns()
+    for i in range(iters):
+        func()
+    torch.cuda.synchronize()
+    t1 = time.perf_counter_ns()
+    return float(t1 - t0) / 1e6 / iters
+
+
+def enable_torch_profiler(name):
+    prof = torch.profiler.profile(
+        schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(
+            f'./log/{name}-{datetime.datetime.now().strftime("%m%d-%H%M%S")}'
+        ),
+        # record_shapes=True,
+        # with_stack=True,
+        # profile_memory=True,
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ],
+    )
+
+    def print_and_exit(*args, **kwargs):
+        prof.__exit__(prof, *args, **kwargs)
+
+    # prof.__exit__ = print_and_exit # TODO. fix it
+    return prof
+
+
+def torch_profile_it(name, fn):
+    torch.cuda.synchronize()
+    log_name = f'./log/{name}-{datetime.datetime.now().strftime("%m%d-%H%M%S")}'
+    with torch.profiler.profile(
+        schedule=torch.profiler.schedule(wait=0, warmup=1, active=1, repeat=1),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler(log_name),
+        # record_shapes=True,
+        # with_stack=True,
+        # profile_memory=True,
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ],
+    ) as prof:
+        for i in range(2):
+            fn()
+            torch.cuda.synchronize()
+            prof.step()
+    print(f"Writting log to {log_name}")
+    print(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=50))
+    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=50))
+
+    return prof
+
+
+def torch_profile_decorator(name):
+    assert isinstance(name, str)
+
+    def decorator(fn):
+        def wrapper(*args, **kwargs):
+            torch.cuda.synchronize()
+            log_name = f'./log/{name}-{datetime.datetime.now().strftime("%m%d-%H%M%S")}'
+            with torch.profiler.profile(
+                schedule=torch.profiler.schedule(wait=0, warmup=1, active=1, repeat=1),
+                on_trace_ready=torch.profiler.tensorboard_trace_handler(log_name),
+                # record_shapes=True,
+                # with_stack=True,
+                # profile_memory=True,
+                activities=[
+                    torch.profiler.ProfilerActivity.CPU,
+                    torch.profiler.ProfilerActivity.CUDA,
+                ],
+            ) as prof:
+                for i in range(2):
+                    result = fn(*args, **kwargs)
+                    torch.cuda.synchronize()
+                    prof.step()
+            print(f"Writting log to {log_name}")
+            print(
+                prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=50)
+            )
+            print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=50))
+            exit()
+            return result
+
+        return wrapper
+
+    return decorator
