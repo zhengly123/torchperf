@@ -182,27 +182,35 @@ def enable_torch_profiler(name):
     return prof
 
 
-def torch_profile_it(name, fn):
+def torch_profile_it(
+    name,
+    fn,
+    *,
+    warmup=1,
+    with_stack=False,
+    sort_keys=["self_cuda_time_total", "cuda_time_total"],
+):
     torch.cuda.synchronize()
     log_name = f'./log/{name}-{datetime.datetime.now().strftime("%m%d-%H%M%S")}'
     with torch.profiler.profile(
-        schedule=torch.profiler.schedule(wait=0, warmup=1, active=1, repeat=1),
+        schedule=torch.profiler.schedule(wait=0, warmup=warmup, active=1, repeat=1),
         on_trace_ready=torch.profiler.tensorboard_trace_handler(log_name),
         # record_shapes=True,
-        # with_stack=True,
+        # with_stack=with_stack,
         # profile_memory=True,
         activities=[
             torch.profiler.ProfilerActivity.CPU,
             torch.profiler.ProfilerActivity.CUDA,
         ],
     ) as prof:
-        for i in range(2):
+        for i in range(warmup + 1):
             fn()
             torch.cuda.synchronize()
             prof.step()
     print(f"Writting log to {log_name}")
-    print(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=50))
-    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=50))
+    for k in sort_keys:
+        print(f"Sorted by {k}:")
+        print(prof.key_averages().table(sort_by=k, row_limit=50))
 
     return prof
 
