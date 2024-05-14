@@ -1,7 +1,7 @@
 import torch
 from torch import _dynamo, fx
 import traceback
-from typing import List
+from typing import List, Callable
 from torch.fx import passes, symbolic_trace
 import pydot
 
@@ -58,10 +58,16 @@ def serialization_backend(gm: torch.fx.GraphModule, example_inputs: List[torch.T
     return gm.forward
 
 
-def draw_simple_graph(gm, fn):
+def draw_simple_graph(
+    gm, fn, *, func: Callable[[torch.fx.Node], str] = None, limit_node_num=100
+):
     dot_graph = pydot.Dot("torchTX Graph", graph_type="graph")
     nodes: list[torch.fx.Node] = gm.graph.nodes
+    node_names = set() # To limit the number of nodes
     for node in nodes:
+        if limit_node_num is not None and len(node_names) > limit_node_num:
+            break
+        node_names.add(node.name)
         label = f"{node.name} ({node.op})"
         node_style = {
             "shape": "record",
@@ -83,11 +89,15 @@ def draw_simple_graph(gm, fn):
                 label += f"\\n| {node.meta['tensor_meta'].shape}"
         except KeyError:
             None
+        if func is not None: # User defined label
+            label += "\n" + func(node)
         dot_graph.add_node(
             # "{}" makes the label in horizontal blocks
             pydot.Node(str(node.name), label="{" + label + "}", **node_style)
         )
     for node in nodes:
+        if limit_node_num is not None and node.name not in node_names:
+            continue
         for arg in node.args:
             if isinstance(arg, torch.fx.node.Node):
                 dot_graph.add_edge(pydot.Edge(arg.name, node.name))
@@ -99,10 +109,18 @@ def draw_simple_graph(gm, fn):
     dot_graph.write_svg(fn)
 
 
-def plot_graph_module(gm: torch.fx.GraphModule, fn):
+def plot_graph_module(
+    gm: torch.fx.GraphModule,
+    fn: str,
+    *,
+    func: Callable[[torch.fx.Node], str] = None,
+    limit_node_num=100,
+):
     g = passes.graph_drawer.FxGraphDrawer(gm, "my_module")
+    if not fn.endswith(".svg"):
+        fn += ".svg"
     g.get_dot_graph().write_svg(fn)
-    draw_simple_graph(gm, "simple_" + fn)
+    draw_simple_graph(gm, "simple_" + fn, func=func)
 
 
 def plot_graph_module_backend(
@@ -129,7 +147,7 @@ def get_dynamo_graph_modules_and_args(
     ):
         gms.append(gm)
         example_input_lists.append(example_inputs)
-        print("example_inputs", example_inputs)
+        # print("example_inputs", example_inputs)
         return gm.forward
 
     module = torch.compile(module, backend=backend_get_graph_module, dynamic=dynamic)
