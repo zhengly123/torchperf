@@ -10,6 +10,8 @@ from .cuda_time import (
     enable_torch_profiler,
     torch_profile_it,
     torch_profile_decorator,
+    profile_with_sync,
+    time_with_sync
 )
 from .torch_dynamo import serialization_backend, explain
 from .utils import allclose

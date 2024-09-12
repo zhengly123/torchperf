@@ -6,6 +6,7 @@ import datetime
 from nvtx import annotate as nvtx_annotate
 import time
 from .torch_dynamo import explain
+from typing import Iterable, Optional, Callable, Any
 
 
 def add_nvtx_range(func):
@@ -248,3 +249,87 @@ def torch_profile_decorator(name):
         return wrapper
 
     return decorator
+
+
+class profile_with_sync(torch.profiler.profile):
+    def __init__(
+        self,
+        log_name: str = "unnamed",
+        cuda_sync: bool = True,
+        print_sort_by: str | Iterable[str] = [
+            "cuda_time_total",
+            "self_cuda_time_total",
+        ],
+        *,
+        activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+        ],
+        # schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
+        schedule=None,
+        on_trace_ready: Optional[Callable[..., Any]] = None,
+        record_shapes: bool = False,
+        profile_memory: bool = False,
+        with_stack: bool = False,
+        with_flops: bool = False,
+        with_modules: bool = False,
+        experimental_config=None,
+        execution_trace_observer=None,
+    ):
+        if on_trace_ready is None and log_name is not None:
+            on_trace_ready = torch.profiler.tensorboard_trace_handler(log_name)
+        self.log_name = log_name
+        self.cuda_sync = cuda_sync
+        self.print_sort_by = (
+            [print_sort_by] if isinstance(print_sort_by, str) else print_sort_by
+        )
+        super().__init__(
+            activities=activities,
+            schedule=schedule,
+            on_trace_ready=on_trace_ready,
+            record_shapes=record_shapes,
+            profile_memory=profile_memory,
+            with_stack=with_stack,
+            with_flops=with_flops,
+            with_modules=with_modules,
+            experimental_config=experimental_config,
+            execution_trace_observer=execution_trace_observer,
+        )
+
+    def __enter__(self):
+        if self.cuda_sync == True:
+            torch.cuda.synchronize()
+        super().__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.cuda_sync == True:
+            torch.cuda.synchronize()
+        # self.step()
+        super().__exit__(exc_type, exc_val, exc_tb)
+        print(f"Writting log to {self.log_name}")
+        for sort_by in self.print_sort_by:
+            print(self.key_averages().table(sort_by=sort_by, row_limit=50))
+
+
+class time_with_sync:
+    def __init__(self, verbose: str | bool | None = None, cuda_sync: bool = True):
+        self.verbose = verbose
+        self.cuda_sync = cuda_sync
+
+    def __enter__(self):
+        torch.cuda.synchronize()
+        if self.cuda_sync == True:
+            torch.cuda.synchronize()
+        self.t0 = time.perf_counter_ns()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.cuda_sync == True:
+            torch.cuda.synchronize()
+        self.t1 = time.perf_counter_ns()
+        self.time_ms = float(self.t1 - self.t0) / 1e6 / 1
+        if isinstance(self.verbose, str):
+            print(f"{self.verbose} {self.time_ms:.1f} ms")
+        elif self.verbose == True:
+            print(f"{self.time_ms:.1f} ms")

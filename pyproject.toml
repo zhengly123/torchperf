@@ -2,3 +2,6 @@
 name = "torchperf"
 version = "0.0.1"
 dependencies = ["nvtx", "onnx", "tabulate", "pydot"]
+
+[tool.setuptools]
+py-modules = []
