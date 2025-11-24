@@ -58,14 +58,14 @@ def serialization_backend(gm: torch.fx.GraphModule, example_inputs: List[torch.T
     return gm.forward
 
 
-def draw_simple_graph(gm, fn):
+def draw_simple_graph(gm, fn, color_list=None):
     dot_graph = pydot.Dot("torchTX Graph", graph_type="graph")
     nodes: list[torch.fx.Node] = gm.graph.nodes
     for node in nodes:
         label = f"{node.name} ({node.op})"
         node_style = {
             "shape": "record",
-            "fillcolor": "white",
+            "fillcolor": color_list.get(node.name, "white") if color_list is not None else "white",
             "style": "rounded, filled",
         }
         if hasattr(node, "info"):
